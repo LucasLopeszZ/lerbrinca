@@ -111,7 +111,7 @@ class PerfilScreen:
             border_radius=14
         )
 
-        # pinos LEGO teste
+        # pinos LEGO teste teste
         for i in range(8):
             stud_x = header_x + 35 + i * 50
 
