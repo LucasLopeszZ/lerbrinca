@@ -5,7 +5,7 @@ from ui_components import draw_lego_brick, draw_panel, LegoButton
 
 # Posições dos blocos no mapa (ajustadas à imagem 1100x700)
 POSICOES_FASES = [
-    (155, 195),   # Fase 1  - verde  canto superior esq
+    (174, 282),   # Fase 1  - verde  canto superior esq
     (328, 230),   # Fase 2  - azul
     (502, 200),   # Fase 3  - laranja
     (690, 235),   # Fase 4  - amarelo
@@ -30,7 +30,7 @@ CORES_FASES = [
     (37,   99, 235),   # 10 azul
 ]
 
-TAMANHO_BLOCO = 72   # px largura e altura do bloco
+TAMANHO_BLOCO = 90   # px largura e altura do bloco
 
 
 class MapaScreen:
