@@ -2,6 +2,7 @@ import pygame
 import random
 import math
 from ui_components import LegoButton
+from screens.fase_concluida import PopupFaseConcluida, avancar_para_proxima_fase
 
 WIDTH, HEIGHT = 1100, 700
 
@@ -16,6 +17,13 @@ BG_COLOR      = ( 30,  50,  90)
 
 BALL_RADIUS = 52
 SPEED       = 3.8
+
+TARGET_OPTIONS = [
+    ("azul", LEGO_BLUE),
+    ("vermelha", LEGO_RED),
+    ("verde", LEGO_GREEN),
+    ("laranja", LEGO_ORANGE),
+]
 
 class Ball:
     def __init__(self, color, name, x, y, vx, vy):
@@ -62,13 +70,20 @@ class Ball:
         return math.hypot(mx - self.x, my - self.y) <= self.radius
 
 
-def spawn_balls():
+def spawn_balls(target_name=None, target_color=None):
     positions = [(250, 220), (820, 200), (220, 470), (780, 450)]
     random.shuffle(positions)
+    if target_name is None or target_color is None:
+        target_name, target_color = random.choice(TARGET_OPTIONS)
+
+    options = [(target_name, target_color)]
+    others = [opt for opt in TARGET_OPTIONS if opt[0] != target_name]
+    random.shuffle(others)
+    options.extend(others[:3])
+    random.shuffle(options)
+
     balls = []
-    colors = [LEGO_RED, LEGO_BLUE, LEGO_GREEN, LEGO_ORANGE]
-    names  = ["vermelha", "azul", "verde", "laranja"]
-    for i, (color, name) in enumerate(zip(colors, names)):
+    for i, (name, color) in enumerate(options):
         x, y = positions[i]
         angle = random.uniform(0, math.pi * 2)
         spd = SPEED + random.uniform(-0.8, 0.8)
@@ -78,12 +93,13 @@ def spawn_balls():
     return balls
 
 class Popup:
-    def __init__(self, success):
-        self.success  = success
-        self.timer    = 0
-        self.duration = 120
-        self.alpha    = 0
-        self.scale    = 0.4
+    def __init__(self, success, target_name=None):
+        self.success     = success
+        self.target_name = target_name
+        self.timer       = 0
+        self.duration    = 120
+        self.alpha       = 0
+        self.scale       = 0.4
 
     def update(self):
         self.timer += 1
@@ -101,14 +117,15 @@ class Popup:
         return self.timer >= self.duration
 
     def draw(self, surf, font_big, font_small):
+        target_label = (self.target_name or "?").upper()
         if self.success:
             bg_color  = (50, 180, 60)
             line1     = "MUITO BEM!"
-            line2     = "Você achou a bola azul!"
+            line2     = f"Você achou a bola {target_label}!"
         else:
             bg_color  = (200, 50, 40)
             line1     = "OPS!"
-            line2     = "Procure a bola AZUL!"
+            line2     = f"Procure a bola {target_label}!"
 
         pw, ph = 520, 300
         bw = int(pw * self.scale)
@@ -167,16 +184,28 @@ class Fase2Screen:
         self.font_small = pygame.font.SysFont("Arial Rounded MT Bold", 28, bold=True)
         self.btn_voltar = LegoButton(40, self.H - 70, 200, 46,
                                     "◀ VOLTAR AO MAPA", self.cores["cinza_med"], self.font_small, studs=1)
-        self.balls  = spawn_balls()
         self.popup  = None
+        self.fase_concluida = None
         self.score  = 0
         self.misses = 0
+        self.round = 1
+        self.max_rounds = 5
+        self.last_target = None
+        self.current_target_name = None
+        self.current_target_color = None
         self.sound_on = False
+        self._choose_target()
         try:
             pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=512)
             self.sound_on = True
         except Exception:
             self.sound_on = False
+
+    def _choose_target(self):
+        options = [opt for opt in TARGET_OPTIONS if opt[0] != self.last_target]
+        self.current_target_name, self.current_target_color = random.choice(options)
+        self.last_target = self.current_target_name
+        self.balls = spawn_balls(self.current_target_name, self.current_target_color)
 
     def handle_events(self, eventos):
         for ev in eventos:
@@ -186,34 +215,50 @@ class Fase2Screen:
             if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
                 self.estado["tela_atual"] = "mapa"
                 return
-            if ev.type == pygame.MOUSEBUTTONDOWN and self.popup is None:
+            if ev.type == pygame.MOUSEBUTTONDOWN and self.fase_concluida:
+                if self.fase_concluida.handle_event(ev):
+                    avancar_para_proxima_fase(self.estado)
+                continue
+
+            if ev.type == pygame.MOUSEBUTTONDOWN and self.popup is None and self.fase_concluida is None:
                 mx,my = ev.pos
                 for ball in self.balls:
                     if ball.is_clicked(mx, my):
-                        if ball.name == "azul":
+                        if ball.name == self.current_target_name:
                             self.score += 1
-                            self.popup = Popup(success=True)
+                            self.popup = Popup(success=True, target_name=self.current_target_name)
                             if self.sound_on:
                                 beep(600, 150)
                                 pygame.time.delay(80)
                                 beep(800, 200)
                         else:
                             self.misses += 1
-                            self.popup = Popup(success=False)
+                            self.popup = Popup(success=False, target_name=self.current_target_name)
                             if self.sound_on:
                                 beep(250, 300)
                         break
 
     def update(self):
         self.tick += 1
-        if self.popup is None:
+
+        if self.popup is None and self.fase_concluida is None:
             for ball in self.balls:
                 ball.update()
-        else:
+
+        elif self.popup:
             self.popup.update()
+
             if self.popup.is_done():
                 self.popup = None
-                self.balls = spawn_balls()
+
+                # Próxima rodada
+                if self.round < self.max_rounds:
+                    self.round += 1
+                    self._choose_target()
+
+                # Fim da fase
+                else:
+                    self.fase_concluida = PopupFaseConcluida(self.W, self.H, self.estado)
 
     def draw(self):
         self.surf.fill(BG_COLOR)
@@ -228,14 +273,20 @@ class Fase2Screen:
             pygame.draw.circle(self.surf, (220, 50, 35), (sx, 30), 18)
             pygame.draw.circle(self.surf, (240, 80, 60), (sx, 30), 18, 3)
             pygame.draw.circle(self.surf, (255,200,190,120), (sx-5, 22), 7)
-        shadow = self.font_big.render("Clique na bola AZUL!", True, (0,0,0))
+        target_label = (self.current_target_name or "?").upper()
+        prompt_text = f"Clique na bola {target_label}!"
+        shadow = self.font_big.render(prompt_text, True, (0,0,0))
         self.surf.blit(shadow, (WIDTH//2 - shadow.get_width()//2 + 2, 14))
-        title = self.font_big.render("Clique na bola AZUL!", True, LEGO_YELLOW)
+        title = self.font_big.render(prompt_text, True, LEGO_YELLOW)
         self.surf.blit(title, (WIDTH//2 - title.get_width()//2, 12))
+        round_txt = self.font_small.render(f"Rodada {self.round}/{self.max_rounds}", True, LEGO_WHITE)
+        self.surf.blit(round_txt, (30, HEIGHT - 42))
         for ball in self.balls:
             ball.draw(self.surf)
         if self.popup:
             self.popup.draw(self.surf, self.font_big, self.font_small)
-        txt = self.font_small.render(f"✅ Acertos: {self.score}   ❌ Erros: {self.misses}", True, LEGO_WHITE)
+        if self.fase_concluida:
+            self.fase_concluida.draw(self.surf)
+        txt = self.font_small.render(f"Acertos: {self.score}   Erros: {self.misses}", True, LEGO_WHITE)
         self.surf.blit(txt, (WIDTH//2 - txt.get_width()//2, HEIGHT - 42))
         self.btn_voltar.draw(self.surf)

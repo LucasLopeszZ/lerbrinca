@@ -2,6 +2,11 @@ import pygame
 import random
 import math
 from ui_components import LegoButton
+from screens.fase_concluida import (
+    PopupFaseConcluida,
+    avancar_para_proxima_fase,
+    get_phase_completion_text,
+)
 
 WIDTH, HEIGHT = 1100, 700
 FPS = 60
@@ -183,6 +188,7 @@ class Fase8Screen:
         self.gs = GS()
         self.mx = 0
         self.my = 0
+        self.fase_concluida = None
 
         # Constantes adaptadas para resolução 1100x700
         self.SHOW_FRAMES = 60 * 3  # 3 segundos
@@ -328,6 +334,11 @@ class Fase8Screen:
         for ev in eventos:
             self.mx, self.my = pygame.mouse.get_pos()
 
+            if self.fase_concluida:
+                if self.fase_concluida.handle_event(ev):
+                    avancar_para_proxima_fase(self.estado)
+                continue
+
             if self.btn_voltar.handle_event(ev):
                 self.estado["tela_atual"] = "mapa"
                 return
@@ -351,9 +362,6 @@ class Fase8Screen:
                                 self.gs.score += 1
                             self.gs.phase = "feedback"
                             self.gs.fb_timer = self.FB_FRAMES
-                elif self.gs.phase == "end":
-                    self.estado["tela_atual"] = "mapa"
-
     def update(self):
         self.tick += 1
         self.gs.anim += 1
@@ -378,6 +386,7 @@ class Fase8Screen:
                 self.gs.r_index += 1
                 if self.gs.r_index >= TOTAL_ROUNDS:
                     self.gs.phase = "end"
+                    self.fase_concluida = PopupFaseConcluida(self.W, self.H, self.estado)
                 else:
                     self.gs.phase = "show"
                     self.gs.timer = self.SHOW_FRAMES
@@ -443,7 +452,7 @@ class Fase8Screen:
                     self.surf.blit(sh, (self.W // 2 - sh.get_width() // 2 + 3, 230))
                     self.surf.blit(txt, (self.W // 2 - txt.get_width() // 2, 227))
 
-        elif self.gs.phase == "end":
+        elif self.gs.phase == "end" and not self.fase_concluida:
             ov = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
             ov.fill((0, 0, 0, 150))
             self.surf.blit(ov, (0, 0))
@@ -459,11 +468,17 @@ class Fase8Screen:
             t1 = self.font_big.render(f"{emoji}  Fim de Fase!", True, LEGO_RED)
             t2 = self.font_med.render(f"Você acertou {self.gs.score} de {TOTAL_ROUNDS}!", True, LEGO_DARK)
             t3 = self.font_small.render(msg, True, mc)
-            t4 = self.font_small.render("Clique ou ESC para voltar ao mapa", True, LEGO_DARK)
+            _, subtitle, button_text = get_phase_completion_text(self.estado)
+            t4 = self.font_small.render(subtitle, True, LEGO_DARK)
+            t5 = self.font_small.render(button_text, True, LEGO_DARK)
 
             self.surf.blit(t1, (panel.centerx - t1.get_width() // 2, panel.y + 30))
             self.surf.blit(t2, (panel.centerx - t2.get_width() // 2, panel.y + 120))
             self.surf.blit(t3, (panel.centerx - t3.get_width() // 2, panel.y + 190))
-            self.surf.blit(t4, (panel.centerx - t4.get_width() // 2, panel.y + 310))
+            self.surf.blit(t4, (panel.centerx - t4.get_width() // 2, panel.y + 250))
+            self.surf.blit(t5, (panel.centerx - t5.get_width() // 2, panel.y + 310))
 
         self.btn_voltar.draw(self.surf)
+
+        if self.fase_concluida:
+            self.fase_concluida.draw(self.surf)

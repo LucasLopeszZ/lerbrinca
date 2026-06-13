@@ -1,6 +1,8 @@
 import pygame
 import random
 import sys
+import os
+from pathlib import Path
 from screens.login_screen import LoginScreen
 from screens.cadastro_screen import CadastroScreen
 from screens.mapa_screen import MapaScreen
@@ -19,9 +21,11 @@ from screens.perfil_screen import PerfilScreen
 
 
 # ── Configurações gerais ──────────────────────────────────────────────────────
-LARGURA, ALTURA = 1100, 700
-FPS = 60
+FPS = 30
 TITULO = "Ler Brincando"
+BASE_DIR = Path(__file__).resolve().parent
+LOGICAL_WIDTH = 1100
+LOGICAL_HEIGHT = 700
 
 # ── Paleta LEGO ───────────────────────────────────────────────────────────────
 CORES = {
@@ -40,10 +44,87 @@ CORES = {
 }
 
 
+
+def _scale_mouse_pos(pos, display_size):
+    _, _, scaled_w, scaled_h, offset_x, offset_y = _get_render_area(display_size)
+    x = min(max(pos[0] - offset_x, 0), scaled_w)
+    y = min(max(pos[1] - offset_y, 0), scaled_h)
+    scale_x = LOGICAL_WIDTH / max(1, scaled_w)
+    scale_y = LOGICAL_HEIGHT / max(1, scaled_h)
+    return (int(x * scale_x), int(y * scale_y))
+
+
+def _get_render_area(display_size):
+    display_w, display_h = display_size
+    scale = min(display_w / LOGICAL_WIDTH, display_h / LOGICAL_HEIGHT)
+    scaled_w = max(1, int(LOGICAL_WIDTH * scale))
+    scaled_h = max(1, int(LOGICAL_HEIGHT * scale))
+    offset_x = (display_w - scaled_w) // 2
+    offset_y = (display_h - scaled_h) // 2
+    return scale, scale, scaled_w, scaled_h, offset_x, offset_y
+
+
+def _scale_events(eventos, display_size):
+    eventos_convertidos = []
+
+    for ev in eventos:
+        if ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP):
+            attrs = ev.dict.copy()
+            if "pos" in attrs:
+                attrs["pos"] = _scale_mouse_pos(attrs["pos"], display_size)
+            if "rel" in attrs:
+                scale_x, scale_y, _, _, _, _ = _get_render_area(display_size)
+                attrs["rel"] = (
+                    int(attrs["rel"][0] / max(0.001, scale_x)),
+                    int(attrs["rel"][1] / max(0.001, scale_y)),
+                )
+            eventos_convertidos.append(pygame.event.Event(ev.type, attrs))
+        elif ev.type in (pygame.FINGERDOWN, pygame.FINGERUP, pygame.FINGERMOTION):
+            touch_pos = (int(ev.x * LOGICAL_WIDTH), int(ev.y * LOGICAL_HEIGHT))
+            if ev.type == pygame.FINGERMOTION:
+                eventos_convertidos.append(
+                    pygame.event.Event(pygame.MOUSEMOTION, {"pos": touch_pos, "rel": (0, 0), "buttons": (1, 0, 0)})
+                )
+            else:
+                mouse_type = pygame.MOUSEBUTTONDOWN if ev.type == pygame.FINGERDOWN else pygame.MOUSEBUTTONUP
+                eventos_convertidos.append(
+                    pygame.event.Event(mouse_type, {"pos": touch_pos, "button": 1})
+                )
+        else:
+            eventos_convertidos.append(ev)
+
+    return eventos_convertidos
+
+
+def _iniciar_musica():
+    try:
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+
+        musica_path = BASE_DIR / "assets" / "sons" / "musica_fundo.wav"
+        if not musica_path.exists():
+            return
+
+        musica = pygame.mixer.Sound(str(musica_path))
+        musica.play(-1)
+    except pygame.error as exc:
+        print(f"Audio desativado: {exc}")
+
+
 def main():
+    os.environ.setdefault("SDL_TOUCH_MOUSE_EVENTS", "1")
     pygame.init()
+
+    info = pygame.display.Info()
+
+    LARGURA = info.current_w
+    ALTURA = info.current_h
+    if LARGURA <= 0 or ALTURA <= 0:
+        LARGURA, ALTURA = 800, 480
+    
     pygame.display.set_caption(TITULO)
-    tela = pygame.display.set_mode((LARGURA, ALTURA))
+    tela = pygame.display.set_mode((LARGURA, ALTURA), pygame.FULLSCREEN)
+    canvas = pygame.Surface((LOGICAL_WIDTH, LOGICAL_HEIGHT)).convert()
     relogio = pygame.time.Clock()
 
     # Estado global compartilhado entre telas
@@ -55,24 +136,25 @@ def main():
     }
 
     telas = {
-        "login":    LoginScreen(tela, LARGURA, ALTURA, CORES, estado),
-        "cadastro": CadastroScreen(tela, LARGURA, ALTURA, CORES, estado),
-        "perfil":   PerfilScreen(tela, LARGURA, ALTURA, CORES, estado),
-        "mapa":     MapaScreen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_1":   Fase1Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_2":   Fase2Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_3":   LogicaScreen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_4":   Fase4Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_5":   Fase5Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_6":   Fase6Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_7":   Fase7Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_8":   Fase8Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_9":   Fase9Screen(tela, LARGURA, ALTURA, CORES, estado),
-        "fase_10":   Fase10Screen(tela, LARGURA, ALTURA, CORES, estado),
+        "login":    LoginScreen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "cadastro": CadastroScreen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "perfil":   PerfilScreen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "mapa":     MapaScreen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_1":   Fase1Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_2":   Fase2Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_3":   LogicaScreen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_4":   Fase4Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_5":   Fase5Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_6":   Fase6Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_7":   Fase7Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_8":   Fase8Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_9":   Fase9Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "fase_10":   Fase10Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
     }
+    _iniciar_musica()
 
     for i in range(11, 11):
-        telas[f"fase_{i}"] = FaseScreen(tela, LARGURA, ALTURA, CORES, estado, i)
+        telas[f"fase_{i}"] = FaseScreen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado, i)
 
     rodando = True
     while rodando:
@@ -80,15 +162,23 @@ def main():
         for ev in eventos:
             if ev.type == pygame.QUIT:
                 rodando = False
+            elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_F11:
+                pygame.display.toggle_fullscreen()
+
+        eventos_logicos = _scale_events(eventos, (LARGURA, ALTURA))
 
         tela_key = estado["tela_atual"]
         tela_obj = telas.get(tela_key)
 
         if tela_obj:
-            tela_obj.handle_events(eventos)
+            tela_obj.handle_events(eventos_logicos)
             tela_obj.update()
             tela_obj.draw()
 
+        _, _, scaled_w, scaled_h, offset_x, offset_y = _get_render_area((LARGURA, ALTURA))
+        tela.fill((0, 0, 0))
+        frame = pygame.transform.scale(canvas, (scaled_w, scaled_h))
+        tela.blit(frame, (offset_x, offset_y))
         pygame.display.flip()
         relogio.tick(FPS)
 

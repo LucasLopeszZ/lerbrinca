@@ -2,7 +2,7 @@ import pygame
 from ui_components import (
     draw_lego_brick, draw_panel, draw_sky_background,
     draw_grass_strip, LegoButton, InputField, Checkbox,
-    RadioGroup
+    RadioGroup, VirtualKeyboard
 )
 from firebase_auth import cadastrar
 
@@ -28,9 +28,11 @@ class CadastroScreen:
         self.f_normal  = pygame.font.SysFont("Arial", 16)
         self.f_btn     = pygame.font.SysFont("Impact", 20)
         self.f_erro    = pygame.font.SysFont("Arial", 13, bold=True)
+        self.f_teclado = pygame.font.SysFont("Arial", 22, bold=True)
 
         self._build_etapa0()
         self._build_etapa1()
+        self.teclado = VirtualKeyboard(40, self.H - 190, self.W - 80, 180, self.f_teclado)
 
     # ──────────────────────────────────────────────────────────────────────────
     def _build_etapa0(self):
@@ -120,6 +122,11 @@ class CadastroScreen:
     # ──────────────────────────────────────────────────────────────────────────
     def handle_events(self, eventos):
         for ev in eventos:
+            campo_ativo = self._campo_ativo()
+            self._posicionar_teclado(campo_ativo)
+            if self.teclado.handle_event(ev, campo_ativo):
+                continue
+
             if ev.type == pygame.MOUSEWHEEL and self.etapa == 1:
                 self.scroll_y = max(0, min(
                     self.scroll_y - ev.y * 20,
@@ -129,6 +136,10 @@ class CadastroScreen:
             if self.etapa == 0:
                 for inp in self._inputs_etapa0:
                     inp.handle_event(ev)
+                campo_ativo = self._campo_ativo()
+                self._posicionar_teclado(campo_ativo)
+                self.teclado.visible = campo_ativo is not None
+
                 for chk in self._checks_etapa0:
                     chk.handle_event(ev)
                 for rad in self._radios_etapa0:
@@ -137,8 +148,10 @@ class CadastroScreen:
                 if self.btn_proximo.handle_event(ev):
                     self._validar_etapa0()
                 if self.btn_voltar_login.handle_event(ev):
+                    self.teclado.visible = False
                     self.estado["tela_atual"] = "login"
             else:
+                self.teclado.visible = False
                 ev_scroll = self._ev_com_scroll(ev)
                 self.radio_nivel.handle_event(ev_scroll)
                 for chk in self.chks_dific:
@@ -149,6 +162,20 @@ class CadastroScreen:
                     self._fazer_cadastro()
                 if self.btn_voltar_etapa.handle_event(ev):
                     self.etapa = 0
+
+    def _campo_ativo(self):
+        if self.etapa != 0:
+            return None
+        for inp in self._inputs_etapa0:
+            if inp.ativo:
+                return inp
+        return None
+
+    def _posicionar_teclado(self, campo):
+        if campo is None:
+            return
+        y = 70 if campo.rect.centery > self.H // 2 else self.H - 190
+        self.teclado.move_to(40, y)
 
     def _ev_com_scroll(self, ev):
         if ev.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION):
@@ -205,6 +232,7 @@ class CadastroScreen:
 
         self.etapa = 1
         self.scroll_y = 0
+        self.teclado.visible = False
 
     def _fazer_cadastro(self):
         self.msg_erro = ""
@@ -256,6 +284,8 @@ class CadastroScreen:
                              (self.W//2 - err.get_width()//2 - 8,
                               self.H-90, err.get_width()+16, 24), border_radius=6)
             self.surf.blit(err, err.get_rect(centerx=self.W//2, top=self.H-88))
+
+        self.teclado.draw(self.surf)
 
     # ──────────────────────────────────────────────────────────────────────────
     def _draw_etapa0(self):

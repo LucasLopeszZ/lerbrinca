@@ -2,6 +2,11 @@ import pygame
 import random
 import math
 from ui_components import LegoButton, draw_lego_brick
+from screens.fase_concluida import (
+    PopupFaseConcluida,
+    avancar_para_proxima_fase,
+    get_phase_completion_text,
+)
 
 WIDTH, HEIGHT = 1100, 700
 
@@ -293,7 +298,7 @@ class PopupRecompensa:
             pygame.draw.circle(surf, cor_borda, (sx, by + 12), 8)
             pygame.draw.circle(surf, cor_fundo, (sx, by + 12), 8, 2)
 
-        msg = "MUITO BEM! ✓" if self.acertou else "TENTE NOVAMENTE ✗"
+        msg = "MUITO BEM!" if self.acertou else "TENTE NOVAMENTE"
         txt = font_big.render(msg, True, LEGO_WHITE)
         txt_scale = pygame.transform.smoothscale(txt, (int(txt.get_width() * scale), int(txt.get_height() * scale)))
         surf.blit(txt_scale, (bx + bw // 2 - txt_scale.get_width() // 2, by + bh // 2 - txt_scale.get_height() // 2))
@@ -319,6 +324,7 @@ class Fase5Screen:
         self.problema = Problema()
         self.pontos = 0
         self.acertos_consecutivos = 0
+        self.fase_concluida = None
         self.popup = None
         self.fase_completa = False
         self.regenerar_na_proxima = False
@@ -352,6 +358,11 @@ class Fase5Screen:
 
     def handle_events(self, eventos):
         for ev in eventos:
+            if self.fase_concluida:
+                if self.fase_concluida.handle_event(ev):
+                    avancar_para_proxima_fase(self.estado)
+                continue
+
             if self.btn_voltar.handle_event(ev):
                 self.estado["tela_atual"] = "mapa"
                 return
@@ -377,15 +388,13 @@ class Fase5Screen:
 
                             if self.balao.chegou():
                                 self.fase_completa = True
+                                self.fase_concluida = PopupFaseConcluida(self.W, self.H, self.estado)
                         else:
                             self.acertos_consecutivos = 0
                             self.popup = PopupRecompensa(acertou=False)
 
                         self.regenerar_na_proxima = True
                         break
-
-            if ev.type == pygame.MOUSEBUTTONDOWN and self.fase_completa:
-                self.estado["tela_atual"] = "mapa"
 
     def update(self):
         self.tick += 1
@@ -474,7 +483,7 @@ class Fase5Screen:
         if self.popup:
             self.popup.draw(self.surf, self.font_big)
 
-        if self.fase_completa:
+        if self.fase_completa and not self.fase_concluida:
             overlay = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 150))
             self.surf.blit(overlay, (0, 0))
@@ -493,11 +502,16 @@ class Fase5Screen:
 
             pontos_txt = self.font_med.render(f"Pontos: {self.pontos}", True, LEGO_YELLOW)
             self.surf.blit(pontos_txt, (bx + box_w // 2 - pontos_txt.get_width() // 2, by + 120))
-
-            clique_txt = self.font_small.render("Clique para voltar ao mapa", True, LEGO_WHITE)
-            self.surf.blit(clique_txt, (bx + box_w // 2 - clique_txt.get_width() // 2, by + 180))
+            _, subtitle, button_text = get_phase_completion_text(self.estado)
+            subtitle_txt = self.font_small.render(subtitle, True, LEGO_WHITE)
+            self.surf.blit(subtitle_txt, (bx + box_w // 2 - subtitle_txt.get_width() // 2, by + 160))
+            t4 = self.font_small.render(button_text, True, LEGO_WHITE)
+            self.surf.blit(t4, (bx + box_w // 2 - t4.get_width() // 2, by + 200))
 
         self.btn_voltar.draw(self.surf)
+
+        if self.fase_concluida:
+            self.fase_concluida.draw(self.surf)
 
         esc_txt = self.font_small.render("ESC = voltar ao mapa", True, (100, 120, 150))
         self.surf.blit(esc_txt, (self.W - esc_txt.get_width() - 16, self.H - 28))

@@ -1,7 +1,7 @@
 import pygame
 from ui_components import (
     draw_lego_brick, draw_panel, draw_sky_background,
-    draw_grass_strip, LegoButton, InputField
+    draw_grass_strip, LegoButton, InputField, VirtualKeyboard
 )
 from firebase_auth import login
 
@@ -24,6 +24,7 @@ class LoginScreen:
         self.fonte_btn     = pygame.font.SysFont("Arial", 20, bold=True)
         self.fonte_link    = pygame.font.SysFont("Arial", 20, bold=True)
         self.fonte_erro    = pygame.font.SysFont("Arial", 20, bold=True)
+        self.fonte_teclado = pygame.font.SysFont("Arial", 22, bold=True)
 
         # Painel central
         pw, ph = 420, 430
@@ -41,6 +42,7 @@ class LoginScreen:
         bx = self.W // 2 - bw // 2
         self.btn_entrar   = LegoButton(bx, py+300, bw, 48, "Entrar", cores["verde"], self.fonte_btn, studs=0)
         self.btn_cadastro = LegoButton(bx, py+362, bw, 40, "Criar conta", cores["azul"], self.fonte_btn, studs=0)
+        self.teclado = VirtualKeyboard(40, self.H - 190, self.W - 80, 180, self.fonte_teclado)
 
         self.py = py
         self.pw = pw
@@ -59,14 +61,26 @@ class LoginScreen:
 
     def handle_events(self, eventos):
         for ev in eventos:
+            campo_ativo = self._campo_ativo()
+            if self.teclado.handle_event(ev, campo_ativo):
+                continue
+
             self.inp_email.handle_event(ev)
             self.inp_senha.handle_event(ev)
+            self.teclado.visible = self._campo_ativo() is not None
 
             if self.btn_entrar.handle_event(ev):
                 self._fazer_login()
 
             if self.btn_cadastro.handle_event(ev):
                 self.estado["tela_atual"] = "cadastro"
+
+    def _campo_ativo(self):
+        if self.inp_email.ativo:
+            return self.inp_email
+        if self.inp_senha.ativo:
+            return self.inp_senha
+        return None
 
     def _fazer_login(self):
         self.msg_erro = ""
@@ -125,7 +139,7 @@ class LoginScreen:
 
         # Mensagem de erro
         if self.msg_erro:
-            err = self.fonte_erro.render(f"⚠  {self.msg_erro}", True, (255, 100, 100))
+            err = self.fonte_erro.render(f"Aviso: {self.msg_erro}", True, (255, 100, 100))
             self.surf.blit(err, err.get_rect(centerx=self.W//2, top=self.py+285))
 
         if self.carregando:
@@ -144,3 +158,5 @@ class LoginScreen:
             draw_lego_brick(self.surf, cor,
                             (self.px + i * (self.pw//5), self.py - 18, self.pw//5 - 2, 20),
                             studs=1, raio_borda=4)
+
+        self.teclado.draw(self.surf)

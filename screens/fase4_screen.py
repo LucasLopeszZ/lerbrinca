@@ -2,6 +2,7 @@ import pygame
 import random
 import math
 from ui_components import LegoButton, draw_lego_brick
+from screens.fase_concluida import PopupFaseConcluida, avancar_para_proxima_fase
 
 WIDTH, HEIGHT = 1100, 700
 
@@ -224,7 +225,7 @@ class PopupRecompensa:
             pygame.draw.circle(surf, cor_fundo, (sx, by + 12), 8, 2)
         
         # Texto
-        msg = "MUITO BEM! ✓" if self.acertou else "TENTE NOVAMENTE ✗"
+        msg = "MUITO BEM!" if self.acertou else "TENTE NOVAMENTE"
         txt = font_big.render(msg, True, LEGO_WHITE)
         txt_scale = pygame.transform.smoothscale(txt, (int(txt.get_width() * scale), int(txt.get_height() * scale)))
         surf.blit(txt_scale, (bx + bw // 2 - txt_scale.get_width() // 2, by + bh // 2 - txt_scale.get_height() // 2))
@@ -252,6 +253,7 @@ class Fase4Screen:
         self.problema = Problema()
         self.pontos = 0
         self.acertos_consecutivos = 0
+        self.fase_concluida = None
         self.popup = None
         self.fase_completa = False
         self.regenerar_na_proxima = False  # Flag para regenerar no próximo update
@@ -288,6 +290,11 @@ class Fase4Screen:
 
     def handle_events(self, eventos):
         for ev in eventos:
+            if self.fase_concluida:
+                if self.fase_concluida.handle_event(ev):
+                    avancar_para_proxima_fase(self.estado)
+                continue
+
             if self.btn_voltar.handle_event(ev):
                 self.estado["tela_atual"] = "mapa"
                 return
@@ -313,6 +320,7 @@ class Fase4Screen:
                             
                             if self.carro.chegou():
                                 self.fase_completa = True
+                                self.fase_concluida = PopupFaseConcluida(self.W, self.H, self.estado)
                         else:
                             self.acertos_consecutivos = 0
                             self.popup = PopupRecompensa(acertou=False)
@@ -321,7 +329,7 @@ class Fase4Screen:
                         self.regenerar_na_proxima = True
                         break
             
-            if ev.type == pygame.MOUSEBUTTONDOWN and self.fase_completa:
+            if ev.type == pygame.MOUSEBUTTONDOWN and self.fase_completa and not self.fase_concluida:
                 self.estado["tela_atual"] = "mapa"
 
     def update(self):
@@ -409,7 +417,7 @@ class Fase4Screen:
             self.popup.draw(self.surf, self.font_big)
         
         # Tela de vitória
-        if self.fase_completa:
+        if self.fase_completa and not self.fase_concluida:
             overlay = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 150))
             self.surf.blit(overlay, (0, 0))
@@ -437,6 +445,9 @@ class Fase4Screen:
         
         # Botão voltar
         self.btn_voltar.draw(self.surf)
+
+        if self.fase_concluida:
+            self.fase_concluida.draw(self.surf)
         
         # Hint ESC
         esc_txt = self.font_small.render("ESC = voltar ao mapa", True, (100, 120, 150))

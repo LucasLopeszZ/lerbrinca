@@ -2,6 +2,7 @@ import pygame
 import random
 import math
 from ui_components import LegoButton
+from screens.fase_concluida import PopupFaseConcluida, avancar_para_proxima_fase
 
 WIDTH, HEIGHT = 1100, 700
 
@@ -232,12 +233,10 @@ class TelaAcerto:
             pygame.draw.circle(surf,(70,200,85),(sx,by+16),10)
             pygame.draw.circle(surf,LEGO_WHITE, (sx,by+16),10,2)
 
-        t1 = font_big.render("MUITO BEM!  Fase concluida!", True, LEGO_WHITE)
-        t2 = font_small.render("Clique para voltar ao mapa", True, LEGO_YELLOW)
+        t1 = font_big.render("MUITO BEM!", True, LEGO_WHITE)
+        
         t1 = pygame.transform.smoothscale(t1,(int(t1.get_width()*sc),int(t1.get_height()*sc)))
-        t2 = pygame.transform.smoothscale(t2,(int(t2.get_width()*sc*0.9),int(t2.get_height()*sc*0.9)))
         surf.blit(t1,(WIDTH//2-t1.get_width()//2, by+bh//2-t1.get_height()-6))
-        surf.blit(t2,(WIDTH//2-t2.get_width()//2, by+bh//2+6))
 
         if not self.animate:
             mx,my = pygame.mouse.get_pos()
@@ -256,7 +255,7 @@ class TelaAcerto:
                 pygame.draw.circle(surf,tuple(min(255,c+30) for c in bcol),(sx,self.btn_rect.y+12),8)
                 pygame.draw.circle(surf,LEGO_DARK,(sx,self.btn_rect.y+12),8,2)
 
-            bt = font_small.render("Voltar ao mapa", True, tcol)
+            bt = font_small.render("Proximo desafio", True, tcol)
             surf.blit(bt,(self.btn_rect.centerx-bt.get_width()//2,
                           self.btn_rect.centery-bt.get_height()//2))
 
@@ -393,11 +392,11 @@ class Fase1Screen:
         self.cores = cores
         self.estado = estado
         self.tick = 0
-        self.font_huge  = pygame.font.SysFont("Arial Rounded MT Bold", 64, bold=True)
-        self.font_big   = pygame.font.SysFont("Arial Rounded MT Bold", 44, bold=True)
-        self.font_med   = pygame.font.SysFont("Arial Rounded MT Bold", 32, bold=True)
-        self.font_small = pygame.font.SysFont("Arial Rounded MT Bold", 24, bold=True)
-        self.font_title = pygame.font.SysFont("Impact", 52, bold=True)
+        self.font_huge  = pygame.font.SysFont("Arial", 64, bold=True)
+        self.font_big   = pygame.font.SysFont("Arial", 44, bold=True)
+        self.font_med   = pygame.font.SysFont("Arial", 32, bold=True)
+        self.font_small = pygame.font.SysFont("Arial", 24, bold=True)
+        self.font_title = pygame.font.SysFont("Arial", 52, bold=True)
         self.btn_voltar = LegoButton(40, self.H - 70, 200, 46,
                                     "◀ VOLTAR AO MAPA", self.cores["cinza_med"], self.font_small, studs=1)
         self.clouds = [Cloud(random.randint(0, WIDTH)) for _ in range(7)]
@@ -405,8 +404,11 @@ class Fase1Screen:
         self.a, self.b, self.correct, self.blocks, self.slot = new_round()
         self.popup_erro = None
         self.tela_acerto = None
+        self.fase_concluida = None
         self.drag_block = None
         self.pontos = 0
+        self.round = 1
+        self.max_rounds = 5
 
     def handle_events(self, eventos):
         for ev in eventos:
@@ -420,10 +422,19 @@ class Fase1Screen:
             if ev.type == pygame.MOUSEBUTTONDOWN and self.tela_acerto:
                 mx,my = ev.pos
                 if self.tela_acerto.check_click(mx,my):
-                    self.estado["tela_atual"] = "mapa"
+                    if self.round < self.max_rounds:
+                        self.round += 1
+                        self.start_next_round()
+                    else:
+                        self.estado["tela_atual"] = "mapa"
                 continue
 
-            if self.popup_erro is None and self.tela_acerto is None:
+            if ev.type == pygame.MOUSEBUTTONDOWN and self.fase_concluida:
+                if self.fase_concluida.handle_event(ev):
+                    avancar_para_proxima_fase(self.estado)
+                continue
+
+            if self.popup_erro is None and self.tela_acerto is None and not self.fase_concluida:
                 if ev.type == pygame.MOUSEBUTTONDOWN:
                     mx,my = ev.pos
                     for blk in self.blocks:
@@ -447,8 +458,11 @@ class Fase1Screen:
                             self.drag_block.dragging = False
                             self.drag_block.placed = True
                             self.slot.filled = True
-                            self.tela_acerto = TelaAcerto()
                             self.pontos += 1
+                            if self.round < self.max_rounds:
+                                self.tela_acerto = TelaAcerto()
+                            else:
+                                self.fase_concluida = PopupFaseConcluida(self.W, self.H, self.estado)
                         else:
                             self.drag_block.return_home()
                             self.popup_erro = PopupErro()
@@ -468,6 +482,12 @@ class Fase1Screen:
                 self.popup_erro = None
         if self.tela_acerto:
             self.tela_acerto.update()
+
+    def start_next_round(self):
+        self.a, self.b, self.correct, self.blocks, self.slot = new_round()
+        self.popup_erro = None
+        self.tela_acerto = None
+        self.drag_block = None
 
     def draw(self):
         draw_background(self.surf, self.tick)
@@ -497,6 +517,11 @@ class Fase1Screen:
             if blk.placed:
                 draw_lego_block(self.surf, blk.color, (self.slot.x,self.slot.y,BLOCK_W,BLOCK_H), str(blk.number),
                                 font_big=self.font_big, font_med=self.font_med)
+        round_txt = self.font_med.render(f"Questão {self.round}/{self.max_rounds}", True, LEGO_YELLOW)
+        round_shadow = self.font_med.render(f"Questão {self.round}/{self.max_rounds}", True, (0,0,0))
+        self.surf.blit(round_shadow, (PANEL_X+22, PANEL_Y+TAB_H+PANEL_H-84))
+        self.surf.blit(round_txt, (PANEL_X+20, PANEL_Y+TAB_H+PANEL_H-86))
+
         pts = self.font_med.render(f"Pontos: {self.pontos}", True, LEGO_YELLOW)
         ps2 = self.font_med.render(f"Pontos: {self.pontos}", True, (0,0,0))
         self.surf.blit(ps2,(PANEL_X+22, PANEL_Y+TAB_H+PANEL_H-52))
@@ -505,4 +530,6 @@ class Fase1Screen:
             self.popup_erro.draw(self.surf, self.font_big)
         if self.tela_acerto:
             self.tela_acerto.draw(self.surf, self.font_big, self.font_small)
+        if self.fase_concluida:
+            self.fase_concluida.draw(self.surf)
         self.btn_voltar.draw(self.surf)

@@ -176,6 +176,103 @@ class InputField:
             pygame.draw.line(surf, (255,255,255), (cx, cy1), (cx, cy2), 2)
 
 
+class VirtualKeyboard:
+    """Teclado simples para uso em telas touch."""
+
+    def __init__(self, x, y, w, h, fonte=None):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.fonte = fonte or pygame.font.SysFont("Arial", 22, bold=True)
+        self.rows = [
+            list("1234567890"),
+            list("qwertyuiop"),
+            list("asdfghjkl"),
+            list("zxcvbnm.-_/"),
+            ["@", "ESPACO", "APAGAR", "LIMPAR", "OK"],
+        ]
+        self.key_rects = []
+        self.visible = False
+        self._build_keys()
+
+    def _build_keys(self):
+        self.key_rects = []
+        gap = 6
+        row_h = (self.rect.h - gap * (len(self.rows) + 1)) // len(self.rows)
+        y = self.rect.y + gap
+
+        for row in self.rows:
+            unit_count = sum(2 if key in ("APAGAR", "LIMPAR") else 1 for key in row)
+            key_w = (self.rect.w - gap * (unit_count + 1)) // unit_count
+            x = self.rect.x + gap
+
+            for key in row:
+                units = 2 if key in ("ESPACO", "APAGAR", "LIMPAR") else 1
+                rect = pygame.Rect(x, y, key_w * units + gap * (units - 1), row_h)
+                self.key_rects.append((key, rect))
+                x += rect.w + gap
+
+            y += row_h + gap
+
+    def move_to(self, x, y):
+        if self.rect.x == x and self.rect.y == y:
+            return
+        self.rect.x = x
+        self.rect.y = y
+        self._build_keys()
+
+    def handle_event(self, ev, campo):
+        if not self.visible or campo is None:
+            return False
+
+        if ev.type != pygame.MOUSEBUTTONDOWN or ev.button != 1:
+            return False
+
+        if not self.rect.collidepoint(ev.pos):
+            return False
+
+        for key, rect in self.key_rects:
+            if not rect.collidepoint(ev.pos):
+                continue
+
+            if key == "APAGAR":
+                campo.texto = campo.texto[:-1]
+            elif key == "LIMPAR":
+                campo.texto = ""
+            elif key == "OK":
+                campo.ativo = False
+                self.visible = False
+            elif key == "ESPACO" and len(campo.texto) < 60:
+                campo.texto += " "
+            elif len(campo.texto) < 60:
+                campo.texto += key
+            return True
+
+        return True
+
+    def draw(self, surf):
+        if not self.visible:
+            return
+
+        panel = pygame.Surface((self.rect.w, self.rect.h), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (15, 18, 28, 235), panel.get_rect(), border_radius=12)
+        pygame.draw.rect(panel, (255, 255, 255, 45), panel.get_rect(), 2, border_radius=12)
+        surf.blit(panel, self.rect.topleft)
+
+        for key, rect in self.key_rects:
+            if key == "OK":
+                color = (34, 197, 94)
+            elif key in ("APAGAR", "LIMPAR"):
+                color = (220, 38, 38)
+            elif key == "ESPACO":
+                color = (75, 151, 74)
+            else:
+                color = (37, 99, 235)
+
+            pygame.draw.rect(surf, color, rect, border_radius=7)
+            pygame.draw.rect(surf, (15, 15, 25), rect, 2, border_radius=7)
+            label = self.fonte.render(key, True, (255, 255, 255))
+            surf.blit(label, label.get_rect(center=rect.center))
+
+
 class Checkbox:
     """Checkbox estilo LEGO."""
 
@@ -246,15 +343,15 @@ class RadioGroup:
 
 
 class AvatarSelector:
-    """Seletor de avatares LEGO (círculos coloridos com letra/emoji)."""
+    """Seletor de avatares LEGO."""
 
     AVATARES = [
-        {"label": "🧒", "cor": (220,38,38),   "nome": "Herói"},
-        {"label": "👧", "cor": (236,72,153),  "nome": "Princesa"},
-        {"label": "🧑", "cor": (37,99,235),   "nome": "Explorador"},
-        {"label": "🦸", "cor": (34,197,94),   "nome": "Super"},
-        {"label": "🧙", "cor": (147,51,234),  "nome": "Mago"},
-        {"label": "🤖", "cor": (100,116,139), "nome": "Robô"},
+        {"label": "H", "cor": (220, 38, 38), "nome": "Heroi"},
+        {"label": "P", "cor": (236, 72, 153), "nome": "Princesa"},
+        {"label": "E", "cor": (37, 99, 235), "nome": "Explorador"},
+        {"label": "S", "cor": (34, 197, 94), "nome": "Super"},
+        {"label": "M", "cor": (147, 51, 234), "nome": "Mago"},
+        {"label": "R", "cor": (100, 116, 139), "nome": "Robo"},
     ]
 
     def __init__(self, cx, y, fonte_pequena):
@@ -265,9 +362,9 @@ class AvatarSelector:
         self.rects = []
         total = len(self.AVATARES)
         espacamento = 90
-        inicio = cx - (total-1)*espacamento//2
+        inicio = cx - (total - 1) * espacamento // 2
         for i in range(total):
-            self.rects.append(pygame.Rect(inicio + i*espacamento - 30, y, 60, 60))
+            self.rects.append(pygame.Rect(inicio + i * espacamento - 30, y, 60, 60))
 
     def handle_event(self, ev):
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -277,20 +374,19 @@ class AvatarSelector:
 
     def draw(self, surf):
         for i, (r, av) in enumerate(zip(self.rects, self.AVATARES)):
-            ativo = (i == self.selecionado)
-            # Sombra
-            pygame.draw.circle(surf, (0,0,0,100), (r.centerx+3, r.centery+3), 30)
-            # Círculo
+            ativo = i == self.selecionado
+            pygame.draw.circle(surf, (0, 0, 0, 100), (r.centerx + 3, r.centery + 3), 30)
             pygame.draw.circle(surf, av["cor"], r.center, 30)
             if ativo:
-                pygame.draw.circle(surf, (255,255,255), r.center, 30, 4)
-            # Emoji
-            emoji_surf = self.fonte.render(av["label"], True, (255,255,255))
-            surf.blit(emoji_surf, emoji_surf.get_rect(center=r.center))
-            # Nome abaixo
-            nome_surf = self.fonte.render(av["nome"], True,
-                                          (255,255,100) if ativo else (180,180,200))
-            surf.blit(nome_surf, nome_surf.get_rect(centerx=r.centerx, top=r.bottom+4))
+                pygame.draw.circle(surf, (255, 255, 255), r.center, 30, 4)
+
+            label_surf = self.fonte.render(av["label"], True, (255, 255, 255))
+            surf.blit(label_surf, label_surf.get_rect(center=r.center))
+
+            nome_surf = self.fonte.render(
+                av["nome"], True, (255, 255, 100) if ativo else (180, 180, 200)
+            )
+            surf.blit(nome_surf, nome_surf.get_rect(centerx=r.centerx, top=r.bottom + 4))
 
     @property
     def valor(self):

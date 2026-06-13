@@ -2,6 +2,11 @@ import pygame
 import random
 import math
 from ui_components import LegoButton
+from screens.fase_concluida import (
+    PopupFaseConcluida,
+    avancar_para_proxima_fase,
+    get_phase_completion_text,
+)
 
 WIDTH, HEIGHT = 1100, 700
 
@@ -82,6 +87,7 @@ class Fase7Screen:
         self.font_btn = pygame.font.Font(None, 48)
         self.font_score = pygame.font.Font(None, 44)
         self.font_small = pygame.font.Font(None, 30)
+        self.fase_concluida = None
 
         # Estado do jogo
         self.gs = GS()
@@ -201,7 +207,7 @@ class Fase7Screen:
             text = "✔ CORRETO!"
         else:
             bg_color = WRONG_RED
-            text = "✘ TENTE NOVAMENTE!"
+            text = "TENTE NOVAMENTE!"
 
         banner_w = 420
         banner_h = 60
@@ -306,12 +312,15 @@ class Fase7Screen:
                    ("Muito bem! Continue! 👍", LEGO_BLUE) if score >= total // 2 else
                    ("Tente de novo! 💪", LEGO_RED))
         t3 = self.font_score.render(msg, True, mc)
-        t4 = self.font_small.render("Clique ou ESC para voltar ao mapa", True, LEGO_DARK)
+        _, subtitle, button_text = get_phase_completion_text(self.estado)
+        t4 = self.font_small.render(subtitle, True, LEGO_DARK)
+        t5 = self.font_small.render(button_text, True, LEGO_DARK)
 
         surf.blit(t1, (panel.centerx - t1.get_width() // 2, panel.y + 30))
         surf.blit(t2, (panel.centerx - t2.get_width() // 2, panel.y + 110))
         surf.blit(t3, (panel.centerx - t3.get_width() // 2, panel.y + 170))
-        surf.blit(t4, (panel.centerx - t4.get_width() // 2, panel.y + 300))
+        surf.blit(t4, (panel.centerx - t4.get_width() // 2, panel.y + 250))
+        surf.blit(t5, (panel.centerx - t5.get_width() // 2, panel.y + 300))
 
     def _get_rects(self):
         rects = []
@@ -325,6 +334,11 @@ class Fase7Screen:
     def handle_events(self, eventos):
         for ev in eventos:
             self.mx, self.my = pygame.mouse.get_pos()
+
+            if self.fase_concluida:
+                if self.fase_concluida.handle_event(ev):
+                    avancar_para_proxima_fase(self.estado)
+                continue
 
             if self.btn_voltar.handle_event(ev):
                 self.estado["tela_atual"] = "mapa"
@@ -347,8 +361,6 @@ class Fase7Screen:
                             if self.gs.feedback == "correct":
                                 self.gs.score += 1
                             self.gs.fb_timer = 90
-                elif self.gs.phase == "end":
-                    self.estado["tela_atual"] = "mapa"
 
     def update(self):
         self.tick += 1
@@ -362,6 +374,7 @@ class Fase7Screen:
                 self.gs.q_index += 1
                 if self.gs.q_index >= len(self.gs.questions):
                     self.gs.phase = "end"
+                    self.fase_concluida = PopupFaseConcluida(self.W, self.H, self.estado)
                 else:
                     self.gs.shuffle()
 
@@ -393,4 +406,7 @@ class Fase7Screen:
 
         elif self.gs.phase == "end":
             self.surf.blit(self.bg_surf, (0, 0))
-            self._draw_end_screen(self.surf, self.gs.score, len(self.gs.questions))
+            if self.fase_concluida:
+                self.fase_concluida.draw(self.surf)
+            else:
+                self._draw_end_screen(self.surf, self.gs.score, len(self.gs.questions))
