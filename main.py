@@ -18,6 +18,7 @@ from screens.fase9_screen import Fase9Screen
 from screens.fase10_screen import Fase10Screen
 from screens.fase_screen import FaseScreen
 from screens.perfil_screen import PerfilScreen
+from screens.jogo_concluido import JogoConcluidoScreen
 
 
 # ── Configurações gerais ──────────────────────────────────────────────────────
@@ -150,6 +151,7 @@ def main():
         "fase_8":   Fase8Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
         "fase_9":   Fase9Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
         "fase_10":   Fase10Screen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
+        "jogo_concluido": JogoConcluidoScreen(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT, CORES, estado),
     }
     _iniciar_musica()
 

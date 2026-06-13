@@ -16,7 +16,8 @@ def avancar_para_proxima_fase(estado, total_fases=TOTAL_FASES):
         estado["fase_atual"] = proxima
         estado["tela_atual"] = f"fase_{proxima}"
     else:
-        estado["tela_atual"] = "mapa"
+        estado["fase_atual"] = total_fases
+        estado["tela_atual"] = "jogo_concluido"
 
 
 def get_phase_completion_text(estado, total_fases=TOTAL_FASES):
@@ -25,7 +26,7 @@ def get_phase_completion_text(estado, total_fases=TOTAL_FASES):
     if fase_atual < total_fases:
         return "FASE CONCLUIDA!", "Proxima fase desbloqueada!", "PROXIMA FASE"
 
-    return "FASE CONCLUIDA!", "Todas as fases foram concluidas!", "VOLTAR AO MAPA"
+    return "FASE CONCLUIDA!", "Todas as fases foram concluidas!", "VER FINAL"
 
 
 class PopupFaseConcluida:
